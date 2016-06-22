@@ -1,0 +1,584 @@
+#!/usr/bin/perl -w
+use strict;
+use Getopt::Std;
+
+my $version = 0.1;
+my $help_message = help_message($version);
+unless($ARGV[0]) {
+    print $help_message;
+    exit;
+}
+
+## options
+our($opt_b, $opt_g, $opt_c, $opt_s, $opt_p, $opt_h, $opt_v);
+getopts('hvb:g:c:s:p:');
+if($opt_h) {
+    print $help_message;
+    exit;
+}
+if($opt_v) {
+    print "strucVis version $version\n";
+    exit;
+}
+
+# pre-requisite checks
+check_install();
+
+# file/input checks
+bam_check($opt_b);
+my %fai = genome_check($opt_g);
+c_check(\$opt_c, \%fai);
+s_check($opt_s);
+p_check($opt_p);
+
+# get RNA sequence
+my $rna = get_rna($opt_g, $opt_c, $opt_s);
+# test
+#print "RNA: $rna\n";
+
+# read-depths as a function of genomic positions
+my %gen_depths = g_depths($opt_b, $opt_c, $opt_s);
+# test
+#my @s1 = sort {$a <=> $b} keys %gen_depths;
+#print "\ngen_depths\n";
+#foreach my $ss1 (@s1) {
+#    print "$ss1\t$gen_depths{$ss1}\n";
+#}
+
+# adjust read depths relative to rna positions
+my %rna_depths = rna_depths(\%gen_depths, \$opt_c, \$opt_s);
+# test
+#my @s2 = sort {$a <=> $b} keys %rna_depths;
+#print "\nrna_depths\n";
+#foreach my $ss2 (@s2) {
+#    print "$ss2\t$rna_depths{$ss2}\n";
+#}
+
+# Generate the initial .ps file, which will be rna.ps in the working directory
+system "echo $rna | RNAfold";
+
+# annotate the ps file
+annotate_ps(\$opt_b, \$opt_g, \$opt_c, \$opt_s, \$opt_p, \%rna_depths);
+
+
+
+sub annotate_ps {
+    my($bamfile, $genfile, $query, $strand, $ps_outfile, $depth_hash) = @_;  # by ref
+    # open files
+    (open(PSIN, "rna.ps")) || die "FATAL: Cant open rna.ps in sub-routine annotate.ps go yell at Mike\n";
+    (open(PSOUT, ">$$ps_outfile")) || die "FATAL: Cant open output file $$ps_outfile to write to.Go yell at Mike\n";
+    
+    # Define the legend 
+    my $legend_string = get_ps_legend_string($bamfile, $genfile, $query, $strand);
+    
+    # Modify the postscript file
+    while (<PSIN>) {
+	## comment out drawoutline and drawpairs commands
+	$_ =~ s/^drawoutline$/\% drawoutline/g;
+	$_ =~ s/^drawpairs$/\% drawpairs/g;
+	
+	## revise bounding box comment to force a full (US) page of 8.5 inches x 11 inches
+	$_ =~ s/^\%\%BoundingBox: \d+ \d+ \d+ \d+/\%\%BoundingBox: 0 0 612 792/g;
+	
+	## print the original
+	print PSOUT "$_";
+	
+	## add legend information at the top
+	if($_ =~ /^\%\%EndComments/) {
+	    print PSOUT "$legend_string\n";
+	}
+	
+	## add the maplemark function after the init call
+	if($_ =~ /^init$/) {
+	    print PSOUT "\n";
+	    print PSOUT "\% From maple\n";
+	    print PSOUT "\/maplemark \{ \% i r g b maplemark  draw filled circle around base i\n";
+	    print PSOUT "  setrgbcolor\n";
+	    print PSOUT "  newpath 1 sub coor exch get aload pop\n";
+	    print PSOUT "  fsize 2 div 0 360 arc closepath fill stroke\n";
+	    print PSOUT "\} bind def\n";
+	    
+	    # also add function to mark the 5' end
+	    print PSOUT "\/show5 \{ \% i mark 5-prime end at base i\n";
+	    print PSOUT "  newpath 1 sub coor exch get aload pop moveto\n";
+	    print PSOUT "  -5 0 rmoveto\n";
+	    print PSOUT "  -15 10 rlineto\n";
+	    print PSOUT "  -8 0 rmoveto \(5\'\) show stroke\n";
+	    print PSOUT "\} bind def\n";
+	    
+	    # mark 5' end
+	    print PSOUT "1 show5\n";
+	    
+	    ## add the colored circles
+	    my $pos;
+	    my $freq;
+	    my @rgb = ();
+	    while(($pos,$freq) = each %$depth_hash) {
+		# test
+		#print STDERR "depth hash pos $pos freq $freq\n";
+		if($freq >= 1) {
+		    @rgb = get_rgb($freq);
+		    print PSOUT "$pos $rgb[0] $rgb[1] $rgb[2] maplemark\n";
+		}
+	    }
+	}
+    }
+    close PSIN;
+    close PSOUT;
+    
+    # remove first ps file
+    system "rm -f rna.ps";
+}
+
+sub get_rgb {
+    my($freq) = @_;
+    my $logfreq = (log($freq) / log(10));
+    
+    my @rgb = ();
+    
+    # First Red
+    if($logfreq <= 1) {
+	$rgb[0] = 0;
+    } elsif (($logfreq > 1) and ($logfreq < 2)) {
+	$rgb[0] = $logfreq - 1;
+    } elsif ($logfreq >= 2) {
+	$rgb[0] = 1;
+    }
+    $rgb[0] = sprintf("%.2f",$rgb[0]);
+    
+    # Now Green
+    if($logfreq <= 1) {
+	$rgb[1] = $logfreq;
+    } elsif (($logfreq > 1) and ($logfreq < 2)) {
+	$rgb[1] = 1;
+    } elsif (($logfreq >= 2) and ($logfreq <= 3)) {
+	$rgb[1] = 3 - $logfreq;
+    } elsif ($logfreq > 3) {
+	$rgb[1] = 0;
+    }
+    $rgb[1] = sprintf("%.2f",$rgb[1]);
+    
+    # Now Blue
+    if($logfreq <= 1) {
+	$rgb[2] = 1;
+    } elsif (($logfreq > 1) and ($logfreq < 2)) {
+	$rgb[2] = 2 - $logfreq;
+    } elsif (($logfreq >= 2) and ($logfreq <= 3)) {
+	$rgb[2] = 0;
+    } elsif (($logfreq > 3) and ($logfreq < 4)) {
+	$rgb[2] = $logfreq - 3;
+    } elsif ($logfreq >= 4) {
+	$rgb[2] = 1;
+    }
+    $rgb[2] = sprintf("%.2f",$rgb[2]);
+    
+    return @rgb;
+}
+
+sub get_ps_legend_string {
+    my($bamfile, $genfile, $query, $strand) = @_; ## refs
+    my $string = "\% maple legend and information
+0 0 1 setrgbcolor
+72 720 4 0 360 arc closepath fill stroke
+0 0.5 1 setrgbcolor
+72 710 4 0 360 arc closepath fill stroke
+0 1 1 setrgbcolor
+72 700 4 0 360 arc closepath fill stroke
+0.5 1 0.5 setrgbcolor
+72 690 4 0 360 arc closepath fill stroke
+1 1 0 setrgbcolor
+72 680 4 0 360 arc closepath fill stroke
+1 0.5 0 setrgbcolor
+72 670 4 0 360 arc closepath fill stroke
+1 0 0 setrgbcolor
+72 660 4 0 360 arc closepath fill stroke
+1 0 0.5 setrgbcolor
+72 650 4 0 360 arc closepath fill stroke
+1 0 1 setrgbcolor
+72 640 4 0 360 arc closepath fill stroke
+
+0 0 0 setrgbcolor
+\/Helvetica findfont
+8 scalefont
+setfont
+80 718 moveto
+\(10\) show
+\/Helvetica findfont
+4 scalefont
+setfont
+90 722 moveto
+\(0\) show
+
+\/Helvetica findfont
+8 scalefont
+setfont
+80 698 moveto
+\(10\) show
+\/Helvetica findfont
+4 scalefont
+setfont
+90 702 moveto
+\(1\) show
+
+\/Helvetica findfont
+8 scalefont
+setfont
+80 678 moveto
+\(10\) show
+\/Helvetica findfont
+4 scalefont
+setfont
+90 682 moveto
+\(2\) show
+
+\/Helvetica findfont
+8 scalefont
+setfont
+80 658 moveto
+\(10\) show
+\/Helvetica findfont
+4 scalefont
+setfont
+90 662 moveto
+\(3\) show
+
+\/Helvetica findfont
+8 scalefont
+setfont
+80 638 moveto
+\(>=10\) show
+\/Helvetica findfont
+4 scalefont
+setfont
+99 642 moveto
+\(4\) show
+
+\/Helvetica findfont
+8 scalefont
+setfont
+68 730 moveto
+\(Depth of Coverage\) show
+
+\% Information at bottom page.
+\/Helvetica findfont
+8 scalefont setfont
+72 134 moveto
+\(Genome: $$genfile\) show
+
+\/Helvetica findfont
+8 scalefont setfont
+72 124 moveto
+\(Alignments: $$bamfile\) show
+
+\/Helvetica findfont
+8 scalefont setfont
+72 114 moveto
+\(Location: $$query $$strand\) show
+
+";
+    return $string;
+}
+
+    
+    
+
+sub rna_depths {
+    my($in_hash, $query, $strand) = @_; 
+    my $g_start;
+    my $g_stop;
+    if($$query =~ /^\S+:(\d+)-(\d+)$/) {
+	$g_start = $1;
+	$g_stop = $2;
+    } else {
+	die "FATAL: bug in sub-routine rna_depths. Go yell at Mike\n";
+    }
+    # First, adjust as if it were plus strand
+    my %plus_hash = ();
+    while((my $gen_num) = each %$in_hash) {
+	my $new_key = $gen_num - $g_start + 1;
+	$plus_hash{$new_key} = $$in_hash{$gen_num};
+    }
+    # if strand in plus, you are done
+    if($$strand eq 'plus') {
+	return %plus_hash;
+    } else {
+	# minus strand .. more work to do
+	# they need to be reversed.
+	# for an entry of 1-100  ..
+	# 1 --> 100, 2-->99, 3-->98, 4-->97, 5-->96 .... 99->2, 100->1
+	my %minus_hash = ();
+	my @sorted = sort {$b <=> $a} keys %plus_hash;
+	# in the above example, @sorted would be 100, 99, 98 ... 2, 1
+	my $i = 0;
+	for my $s (@sorted) {
+	    ++$i;
+	    $minus_hash{$i} = $plus_hash{$s};
+	}
+	return %minus_hash;
+    }
+}
+    
+sub g_depths {
+    my($bamfile, $query, $strand) = @_;
+    my $F = 4 + 256 + 512 + 1024 + 2048;  ## filtered out by default. See SAM spec.
+    if($strand eq 'plus') {
+	$F += 16;
+    }
+    my $flag_string = "-F $F";
+    if($strand eq 'minus') {
+	$flag_string .= " -f 16";
+    }
+    my %depth = ();
+    # initialize so that all positions have a zero
+    if($query =~ /^\S+:(\d+)-(\d+)$/) {
+	for(my $i = $1; $i <= $2; ++$i) {
+	    $depth{$i} = 0;
+	}
+    } else {
+	die "FATAL: bug in sub-routine g_depths - go yell at Mike\n";
+    }
+    
+    # get depths
+    open(SAM, "samtools view $flag_string $bamfile $query |");
+    while (<SAM>) {
+	my @fields = split ("\t", $_);
+	my $len = 0;
+	while($fields[5] =~ /(\d+)[MS\=X]/g) {
+	    $len += $1;
+	}
+	for(my $i = $fields[3]; $i < ($fields[3] + $len); ++$i) {
+	    if(exists($depth{$i})) {
+		++$depth{$i};
+	    }
+	}
+    }
+    close SAM;
+    return %depth;
+}
+
+
+sub get_rna {
+    my($genome, $query, $strand) = @_;
+    open(FASTA, "samtools faidx $genome $query |");
+    my $rawseq = '';
+    while (<FASTA>) {
+	chomp;
+	if($_ =~ /^>/) {
+	    next;
+	}
+	$rawseq .= $_;
+    }
+    close FASTA;
+    # ensure upper-case
+    my $uc_dna = uc $rawseq;
+    
+    # revcomp if required
+    my $ok_dna;
+    if($opt_s eq 'minus') {
+	$ok_dna = reverse $uc_dna;
+	$ok_dna =~ tr/ATCG/TAGC/;
+    } else {
+	$ok_dna = $uc_dna;
+    }
+    
+    # Convert to RNA
+    my $rna = $ok_dna;
+    $rna =~ s/T/U/g;
+    
+    return $rna;
+}
+
+sub p_check {
+    my($p) = @_;
+    if($p) {
+	if(-e $p) {
+	    die "FATAL: Output file $p already exists. I wont overwrite it\!\n";
+	}
+	unless($p =~ /\.ps$/) {
+	    die "FATAL: Output file name $p invalid. It must end with .ps\n";
+	}
+    } else {
+	die "FATAL: Output postscript file not specified via -p\n";
+    }
+}
+
+sub s_check {
+    my($s) = @_;
+    if($s) {
+	unless(($s eq 'plus') or ($s eq 'minus')) {
+	    die "FATAL: Invalid entry for strand via -s. Must be \'plus\' or \'minus\'.\n";
+	}
+    } else {
+	die "FATAL: No strand specified via -s. -s Must be either \'plus\' or \'minus\'.\n";
+    }
+}
+
+
+sub c_check {
+    my($query, $fai_hash) = @_;
+    if($$query) {
+	if($$query =~ /^(\S+):(\d+)-(\d+)$/) {
+	    my $chr = $1;
+	    my $start = $2;
+	    my $stop = $3;
+	    # chr must exist in the genome fai file
+	    unless(exists($$fai_hash{$chr})) {
+		die "FATAL: Query $$query is invalid. Chromosome $chr does not exist in the supplied genome\n";
+	    }
+	    # stop - start must be a positive number between 40 and 20000
+	    my $delta = $stop - $start;
+	    unless(($delta >= 40) and ($delta <= 20000)) {
+		die "FATAL: Query region must be between 40 and 20,000 nts, inclusive\n";
+	    }
+	    # stop cannot fall off the end of a chromosome
+	    my $chr_end = $$fai_hash{$chr};
+	    unless($stop <= $chr_end) {
+		die "FATAL: Query end at position $stop exceeds length of chromosome $chr, which is $chr_end\n";
+	    }
+	} else {
+	    die "FATAL: Query of $$query is invalid. Format is Chr:Start-Stop\n";
+	}
+    } else {
+	die "FATAL: No query region supplied via option -c\n";
+    }
+}
+
+sub genome_check {
+    my($file) = @_;
+    my %fai = ();
+    if($file) {
+	unless(-r $file) {
+	    die "FATAL: Genome file $file not readable\n";
+	}
+	my $faifile = $file . ".fai";
+	unless(-r $faifile) {
+	    die "FATAL: No .fai index found for genome file $file. Please index genome with samtools faidx and try again\n";
+	}
+	open(FAI, "$faifile");
+	while (<FAI>) {
+	    chomp;
+	    my @fields = split ("\t", $_);
+	    $fai{$fields[0]} = $fields[1];
+	}
+	close FAI;
+	return %fai;
+    } else {
+	die "FATAL: No genome file specified via -g\n";
+    }
+}
+
+
+sub bam_check {
+    my($file) = @_;
+    if($file) {
+	unless( -r $file) {
+	    die "FATAL: BAM file $file not readable\n";
+	}
+	my $index = $file . '.bai';
+	unless(-r $index) {
+	    die "FATAL: No .bai index for BAM file $file found. Please sort and index the BAM file and then try again\n";
+	}
+    } else {
+	die "FATAL: No BAM file specified via -b\n";
+    }
+}
+
+
+
+sub check_install {
+    open(W, "which samtools |");
+    my $an = <W>;
+    close W;
+    unless($an) {
+	die "FATAL: required program samtools not found in your PATH\n";
+    }
+    open(W, "which RNAfold |");
+    $an = <W>;
+    close W;
+    unless($an) {
+	die "FATAL: required program RNAfold not found in your PATH\n";
+    }
+}
+
+
+sub help_message {
+    my($version) = @_;
+    my $message = "
+strucVis version $version
+
+USAGE: strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps]
+
+DETAILS:
+ -b : PATH to sorted file of aligned small RNA reads
+ -g : PATH to genome in FASTA format.
+ -c : Coordinates of interest in format Chr:Start-Stop, one-based, inclusive.
+ -s : Genomic strand of interest. Must be 'plus' or 'minus'
+ -p : Name of desired postscript output file
+
+OTHER SWITCHES:
+ -h : Show this message
+ -v : Print version
+
+REQUIRES:
+ samtools
+ RNAfold
+";
+    return $message;
+}
+
+__END__
+
+=head1 LICENSE
+
+strucVis : Display small RNA depth of coverage on a predicted RNA secondary structure
+
+Copyright (C) 2016 Michael J. Axtell
+
+This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+=head1 AUTHOR
+
+Michael J. Axtell, Penn State University mja18@psu.edu
+
+=head1 REQUIREMENTS
+
+perl5 (installed at /usr/bin/perl)
+
+samtools (installed in your PATH)
+
+RNAfold (installed in your PATH)
+
+=head1 USAGE
+
+    strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps]
+
+=head1 INPUTS
+
+-b : path to sorted and indexed BAM alignment file of small RNAs
+
+-g : path to FASTA formatted reference genome. Must be indexed using samtools faidx.
+
+-c : Coordinates of interest in format Chr:start-stop.
+
+-s : Strand of interest. Either 'plus' or 'minus'.
+
+-p : Output postscript file name. Must end in .ps
+
+=head1 OUTPUT
+
+The text-based output of RNAfold is sent to STDOUT, while the annotated post-script file goes to the file indicated by -p.
+
+
+
+
