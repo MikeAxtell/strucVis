@@ -2,7 +2,7 @@
 use strict;
 use Getopt::Std;
 
-my $version = 0.1;
+my $version = 0.2;
 my $help_message = help_message($version);
 unless($ARGV[0]) {
     print $help_message;
@@ -54,13 +54,264 @@ my %rna_depths = rna_depths(\%gen_depths, \$opt_c, \$opt_s);
 #    print "$ss2\t$rna_depths{$ss2}\n";
 #}
 
+
+# print pre-amble for word-cloud
+print "Genome: $opt_g\n";
+print "Alignments: $opt_b\n";
+print "Location: $opt_c $opt_s\n";
+print "Post-script file name: $opt_p\n";
+
 # Generate the initial .ps file, which will be rna.ps in the working directory
 system "echo $rna | RNAfold";
+
+# Begin word cloud
+# get seqs, genomic positions, and abundances
+my %seqs_g = get_seqs_g($opt_b, $opt_c, $opt_s);
+    # the above hash has keys of SEQ:al_start-al_stop and values are the counts.
+
+# test
+#my @kk = keys %seqs_g;
+#foreach my $kkkk (@kk) {
+#    print "$kkkk\t$seqs_g{$kkkk}\n";
+#}
+
+# adjust this information for polarity, T-->U, and coordinates
+my %seqs_final = adjust_seqs(\%seqs_g, \$opt_c, \$opt_s);
+
+# print out the word cloud, sorted by left-most coordinate
+print_words(\%seqs_final, \$opt_c);
 
 # annotate the ps file
 annotate_ps(\$opt_b, \$opt_g, \$opt_c, \$opt_s, \$opt_p, \%rna_depths);
 
+sub print_words {
+    my($hash, $coordinates) = @_;
+    my %by_left = ();
+    while((my $key) = each %$hash) {
+	my $left;
+	if($key =~ /^\S+:(\d+)-\d+$/) {
+	    $left = $1;
+	    $by_left{$key} = $left;
+	} else {
+	    die "Bug in sub-routine print_words yell at Mike\n";
+	}
+    }
+    
+    my @sorted = sort {$by_left{$a} <=> $by_left{$b}} keys %by_left;
+    
+    # get full length of printed sequence region
+    my $full_len;
+    if($$coordinates =~ /^\S+:(\d+)-(\d+)/) {
+	$full_len = $2 - $1 + 1;
+    } else {
+	die "error in sub-routine print_words: blame axtell if u can find him\n";
+    }
+    
+    # Now print in order
+    foreach my $k (@sorted) {
+	my $tally = $$hash{$k};
+	my $seq;
+	my $start;
+	my $stop;
+	if($k =~ /^(\S+):(\d+)-(\d+)$/) {
+	    $seq = $1;
+	    $start = $2;
+	    $stop = $3;
+	} else {
+	    die "Error in sub-routine print_words: blame Mike\n";
+	}
+	my $len = length $seq;
+	for (my $i = 1; $i < $start; ++$i) {
+	    print ".";
+	}
+	print $seq;
+	for (my $j = $stop + 1; $j <= $full_len; ++$j) {
+	    print ".";
+	}
+	print " ";
+	print "len:$len ";
+	print "al:$tally\n";
+    }
+}
 
+sub adjust_seqs {
+    my($inhash, $coordinates, $strand) = @_; ## by reference
+    
+    # parse out the coordinates
+    my $g_start;
+    my $g_stop;
+    
+    if($$coordinates =~ /^\S+:(\d+)-(\d+)$/) {
+	$g_start = $1;
+	$g_stop = $2;
+    } else {
+	die "Bug in sub-routine adjust_seqs: blame Mike\n";
+    }
+    
+    my %out = ();
+    
+    while ((my $inkey, my $tally) = each %$inhash) {
+	# inkey has format SEQ:al_start-al_stop
+	my $inseq;
+	my $al_g_start;
+	my $al_g_stop;
+	if($inkey =~ /^(\S+):(\d+)-(\d+)$/) {
+	    $inseq = $1;
+	    $al_g_start = $2;
+	    $al_g_stop = $3;
+	} else {
+	    die "Bug in sub-routine adjust_seq no parse inkey blame Mike\n";
+	}
+	
+	# adjust sequence first
+	my $outseq;
+	if($$strand eq 'plus') {
+	    $outseq = $inseq;
+	    # convert to RNA
+	    $outseq =~ s/T/U/g;
+	    $outseq =~ s/t/u/g;
+	} else {
+	    # revcomp and convert to RNA
+	    $outseq = reverse $inseq;
+	    $outseq =~ tr/ATCGatcg/UAGCuagc/;
+	}
+	
+	# adjust coordinates
+	# First, like it was plus
+	my $al_start = $al_g_start - $g_start + 1;
+	my $al_stop = $al_g_stop - $g_start + 1;
+	
+	my $outkey;
+	if($$strand eq 'plus') {
+	    # done .. store it
+	    $outkey = "$outseq" . ":" . "$al_start" . "-" . "$al_stop";
+	    $out{$outkey} = $tally;
+	} else {
+	    # need to flip coordinates for minus strand
+	    my %minus_hash = ();
+	    my $j = $g_stop - $g_start + 1; ## total length of region
+	    
+	    # test
+	    #print "MINUS HASH:\n";
+	    for (my $i = 1; $i <= ($g_stop - $g_start + 1); ++$i) {
+		$minus_hash{$i} = $j;
+		#test
+		#print "Key i: $i Value j: $j\n";
+		--$j;
+	    }
+	    $outkey = "$outseq" . ":" . "$minus_hash{$al_stop}" . "-" . "$minus_hash{$al_start}";
+	    $out{$outkey} = $tally;
+	}
+    }
+    return %out;
+}
+	
+
+sub get_seqs_g {
+    my($bamfile, $coordinates, $strand) = @_;
+    
+    # open SAM stream
+    my $F = 4 + 256 + 512 + 1024 + 2048;  ## filtered out by default. See SAM spec.
+    if($strand eq 'plus') {
+	$F += 16;
+    }
+    my $flag_string = "-F $F";
+    if($strand eq 'minus') {
+	$flag_string .= " -f 16";
+    }
+    open(SAM, "samtools view $flag_string $bamfile $coordinates |");
+    
+    # parse coordinates to know the start and stop
+    my $start;
+    my $stop;
+    if($coordinates =~ /^\S+:(\d+)-(\d+)$/) {
+	$start = $1;
+	$stop = $2;
+    } else {
+	die "BUG in sub-routine get_seqs_q cant parse coordinates: go yell at Mike\n";
+    }
+    
+    # our bucket
+    my %hash = ();
+    
+    while (<SAM>) {
+	my @sam_fields = split ("\t", $_);
+	
+        # Check CIGAR, we won't deal with alignments involving indels (I, D), introns (N), clipping (S, H), or padding (P).
+	if($sam_fields[5] =~ /[IDNSHP]/) {
+	    next;
+	}
+	
+	# SEQ must be defined, have only ATGC, and be at least 5 characters long
+	unless($sam_fields[9] =~ /^[ATGC]{5,}$/) {
+	    next;
+	}
+	
+	# The start and stop of the alignment must be fully contained in the query region
+	my $al_start = $sam_fields[3];
+	my $al_stop = $al_start + (length $sam_fields[9]) - 1;
+	unless(($al_start >= $start) and 
+	       ($al_start <= $stop) and
+	       ($al_stop >= $start) and
+	       ($al_stop <= $stop)) {
+	    next;
+	}
+	
+	# Check for mimatched positions via the MD:Z tag
+	my $revised_seq;
+	if($_ =~ /\tMD:Z:(\S+)/) {
+	    my @mm_positions = parse_mdz($1);
+	    if($mm_positions[0]) {
+		$revised_seq = revise_seq(\$sam_fields[9], \@mm_positions);
+		## this just inserts lower-case letters at mismatched positions
+	    } else {
+		$revised_seq = $sam_fields[9];
+	    }
+	} else {
+	    $revised_seq = $sam_fields[9];
+	}
+	
+	
+	# define its name, which is SEQ:al_start-al_stop
+	my $key = "$revised_seq" . ":" . "$al_start" . "-" . "$al_stop";
+	
+	# add it to the count
+	++$hash{$key};
+    }
+    close SAM;
+    return %hash;
+}
+
+sub revise_seq {
+    my($inseq, $mm_array) = @_;  # by reference
+    my @bits = split ('', $$inseq);
+    foreach my $mm (@$mm_array) {
+	my $i = $mm - 1;
+	my $new = lc $bits[$i];
+	$bits[$i] = $new;
+    }
+    my $outseq = join ('', @bits);
+    return $outseq;
+}
+
+sub parse_mdz {
+    # assume no indels, only mismatches.
+    my($value) = @_;
+    my @mm_pos = ();
+    my $done;
+    while ($value =~ /(\d+)(\D+)/g) {
+	$done += $1;
+	my @bits = split ('', $2);
+	foreach my $bb (@bits) {
+	    ++$done;
+	    push(@mm_pos, $done);
+	}
+    }
+    return @mm_pos;
+}
+    
+    
+    
 
 sub annotate_ps {
     my($bamfile, $genfile, $query, $strand, $ps_outfile, $depth_hash) = @_;  # by ref
@@ -329,8 +580,12 @@ sub g_depths {
 	$flag_string .= " -f 16";
     }
     my %depth = ();
+    my $c_start;
+    my $c_stop;
     # initialize so that all positions have a zero
     if($query =~ /^\S+:(\d+)-(\d+)$/) {
+	$c_start = $1;
+	$c_stop = $2;
 	for(my $i = $1; $i <= $2; ++$i) {
 	    $depth{$i} = 0;
 	}
@@ -342,6 +597,28 @@ sub g_depths {
     open(SAM, "samtools view $flag_string $bamfile $query |");
     while (<SAM>) {
 	my @fields = split ("\t", $_);
+	
+	# No alignments involving indels (I, D), introns (N), clipping (S, H), or padding (P).   
+	if($fields[5] =~ /[IDNSHP]/) {
+	    next;
+	}
+	
+	# SEQ must be defined, have only ATGC, and be at least 5 characters long
+	unless($fields[9] =~ /^[ATGC]{5,}$/) {
+	    next;
+	}
+	
+	# The start and stop of the alignment must be fully contained in the query region
+	my $al_start = $fields[3];
+	my $al_stop = $al_start + (length $fields[9]) - 1;
+	unless(($al_start >= $c_start) and 
+	       ($al_start <= $c_stop) and
+	       ($al_stop >= $c_start) and
+	       ($al_stop <= $c_stop)) {
+	    next;
+	}
+
+	
 	my $len = 0;
 	while($fields[5] =~ /(\d+)[MS\=X]/g) {
 	    $len += $1;
@@ -577,7 +854,22 @@ RNAfold (installed in your PATH)
 
 =head1 OUTPUT
 
-The text-based output of RNAfold is sent to STDOUT, while the annotated post-script file goes to the file indicated by -p.
+The text-based output of RNAfold is sent to STDOUT along with a text-based 'read cloud' of all aligned reads.
+The annotated post-script file goes to the file indicated by -p.
+
+=head1 CHANGELOG
+
+=head2 version 0.2
+
+Added 'read cloud' print-out of all reads.
+
+Restricted input alignments to be used to only include primary alignments without indels, introns, clipping, or padding.
+
+=head2 version 0.1
+
+First release
+
+
 
 
 

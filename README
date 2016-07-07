@@ -43,6 +43,17 @@ INPUTS
     -p : Output postscript file name. Must end in .ps
 
 OUTPUT
-    The text-based output of RNAfold is sent to STDOUT, while the annotated
-    post-script file goes to the file indicated by -p.
+    The text-based output of RNAfold is sent to STDOUT along with a
+    text-based 'read cloud' of all aligned reads. The annotated post-script
+    file goes to the file indicated by -p.
+
+CHANGELOG
+  version 0.2
+    Added 'read cloud' print-out of all reads.
+
+    Restricted input alignments to be used to only include primary
+    alignments without indels, introns, clipping, or padding.
+
+  version 0.1
+    First release
 
