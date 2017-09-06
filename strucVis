@@ -2,7 +2,7 @@
 use strict;
 use Getopt::Std;
 
-my $version = 0.2;
+my $version = 0.3;
 my $help_message = help_message($version);
 unless($ARGV[0]) {
     print $help_message;
@@ -10,8 +10,8 @@ unless($ARGV[0]) {
 }
 
 ## options
-our($opt_b, $opt_g, $opt_c, $opt_s, $opt_p, $opt_h, $opt_v);
-getopts('hvb:g:c:s:p:');
+our($opt_b, $opt_g, $opt_c, $opt_s, $opt_p, $opt_h, $opt_v, $opt_n);
+getopts('hvb:g:c:s:p:n:');
 if($opt_h) {
     print $help_message;
     exit;
@@ -30,6 +30,7 @@ my %fai = genome_check($opt_g);
 c_check(\$opt_c, \%fai);
 s_check($opt_s);
 p_check($opt_p);
+n_check(\$opt_n);
 
 # get RNA sequence
 my $rna = get_rna($opt_g, $opt_c, $opt_s);
@@ -60,6 +61,7 @@ print "Genome: $opt_g\n";
 print "Alignments: $opt_b\n";
 print "Location: $opt_c $opt_s\n";
 print "Post-script file name: $opt_p\n";
+print "Locus Name: $opt_n\n";
 
 # Generate the initial .ps file, which will be rna.ps in the working directory
 system "echo $rna | RNAfold";
@@ -82,7 +84,7 @@ my %seqs_final = adjust_seqs(\%seqs_g, \$opt_c, \$opt_s);
 print_words(\%seqs_final, \$opt_c);
 
 # annotate the ps file
-annotate_ps(\$opt_b, \$opt_g, \$opt_c, \$opt_s, \$opt_p, \%rna_depths);
+annotate_ps(\$opt_b, \$opt_g, \$opt_c, \$opt_s, \$opt_p, \%rna_depths, \$opt_n);
 
 sub print_words {
     my($hash, $coordinates) = @_;
@@ -314,13 +316,13 @@ sub parse_mdz {
     
 
 sub annotate_ps {
-    my($bamfile, $genfile, $query, $strand, $ps_outfile, $depth_hash) = @_;  # by ref
+    my($bamfile, $genfile, $query, $strand, $ps_outfile, $depth_hash, $name) = @_;  # by ref
     # open files
     (open(PSIN, "rna.ps")) || die "FATAL: Cant open rna.ps in sub-routine annotate.ps go yell at Mike\n";
     (open(PSOUT, ">$$ps_outfile")) || die "FATAL: Cant open output file $$ps_outfile to write to.Go yell at Mike\n";
     
     # Define the legend 
-    my $legend_string = get_ps_legend_string($bamfile, $genfile, $query, $strand);
+    my $legend_string = get_ps_legend_string($bamfile, $genfile, $query, $strand, $name);
     
     # Modify the postscript file
     while (<PSIN>) {
@@ -427,7 +429,7 @@ sub get_rgb {
 }
 
 sub get_ps_legend_string {
-    my($bamfile, $genfile, $query, $strand) = @_; ## refs
+    my($bamfile, $genfile, $query, $strand, $name) = @_; ## refs
     my $string = "\% maple legend and information
 0 0 1 setrgbcolor
 72 720 4 0 360 arc closepath fill stroke
@@ -526,11 +528,14 @@ setfont
 72 114 moveto
 \(Location: $$query $$strand\) show
 
+\/Helvetica findfont
+8 scalefont setfont
+72 104 moveto
+\(Name: $$name\) show
+
 ";
     return $string;
 }
-
-    
     
 
 sub rna_depths {
@@ -783,7 +788,7 @@ sub help_message {
     my $message = "
 strucVis version $version
 
-USAGE: strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps]
+USAGE: strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps] -n [locus name]
 
 DETAILS:
  -b : PATH to sorted file of aligned small RNA reads
@@ -791,6 +796,7 @@ DETAILS:
  -c : Coordinates of interest in format Chr:Start-Stop, one-based, inclusive.
  -s : Genomic strand of interest. Must be 'plus' or 'minus'
  -p : Name of desired postscript output file
+ -n : Name of the locus. Defaults to 'Unnamed Locus' if not provided.
 
 OTHER SWITCHES:
  -h : Show this message
@@ -803,13 +809,20 @@ REQUIRES:
     return $message;
 }
 
+sub n_check {
+    my($opt_n) = @_;
+    unless($$opt_n) {
+	$$opt_n = 'Unnamed Locus';
+    }
+}
+
 __END__
 
 =head1 LICENSE
 
 strucVis : Display small RNA depth of coverage on a predicted RNA secondary structure
 
-Copyright (C) 2016 Michael J. Axtell
+Copyright (C) 2016-2017 Michael J. Axtell
 
 This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -838,7 +851,7 @@ RNAfold (installed in your PATH)
 
 =head1 USAGE
 
-    strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps]
+    strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps] -n [Locus name]
 
 =head1 INPUTS
 
@@ -852,12 +865,18 @@ RNAfold (installed in your PATH)
 
 -p : Output postscript file name. Must end in .ps
 
+-n : Name of locus. Prints name in the .ps file and on the plain text alignments. If not provided, defaults to 'Unnamed Locus'
+
 =head1 OUTPUT
 
 The text-based output of RNAfold is sent to STDOUT along with a text-based 'read cloud' of all aligned reads.
 The annotated post-script file goes to the file indicated by -p.
 
 =head1 CHANGELOG
+
+=head2 version 0.3 2017-09-06
+
+Added option -n
 
 =head2 version 0.2
 

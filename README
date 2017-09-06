@@ -2,7 +2,7 @@ LICENSE
     strucVis : Display small RNA depth of coverage on a predicted RNA
     secondary structure
 
-    Copyright (C) 2016 Michael J. Axtell
+    Copyright (C) 2016-2017 Michael J. Axtell
 
     This program is free software: you can redistribute it and/or modify it
     under the terms of the GNU General Public License as published by the
@@ -28,7 +28,7 @@ REQUIREMENTS
     RNAfold (installed in your PATH)
 
 USAGE
-        strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps]
+        strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps] -n [Locus name]
 
 INPUTS
     -b : path to sorted and indexed BAM alignment file of small RNAs
@@ -42,12 +42,18 @@ INPUTS
 
     -p : Output postscript file name. Must end in .ps
 
+    -n : Name of locus. Prints name in the .ps file and on the plain text
+    alignments. If not provided, defaults to 'Unnamed Locus'
+
 OUTPUT
     The text-based output of RNAfold is sent to STDOUT along with a
     text-based 'read cloud' of all aligned reads. The annotated post-script
     file goes to the file indicated by -p.
 
 CHANGELOG
+  version 0.3 2017-09-06
+    Added option -n
+
   version 0.2
     Added 'read cloud' print-out of all reads.
 
