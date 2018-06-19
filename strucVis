@@ -2,7 +2,7 @@
 use strict;
 use Getopt::Std;
 
-my $version = 0.3;
+my $version = 0.4;
 my $help_message = help_message($version);
 unless($ARGV[0]) {
     print $help_message;
@@ -10,8 +10,8 @@ unless($ARGV[0]) {
 }
 
 ## options
-our($opt_b, $opt_g, $opt_c, $opt_s, $opt_p, $opt_h, $opt_v, $opt_n);
-getopts('hvb:g:c:s:p:n:');
+our($opt_b, $opt_g, $opt_c, $opt_s, $opt_p, $opt_h, $opt_v, $opt_n, $opt_x);
+getopts('xhvb:g:c:s:p:n:');
 if($opt_h) {
     print $help_message;
     exit;
@@ -512,6 +512,9 @@ setfont
 68 730 moveto
 \(Depth of Coverage\) show
 
+";
+    unless($opt_x) {
+	$string .= "
 \% Information at bottom page.
 \/Helvetica findfont
 8 scalefont setfont
@@ -534,6 +537,7 @@ setfont
 \(Name: $$name\) show
 
 ";
+    }
     return $string;
 }
     
@@ -799,6 +803,7 @@ DETAILS:
  -n : Name of the locus. Defaults to 'Unnamed Locus' if not provided.
 
 OTHER SWITCHES:
+ -x : Suppress printing of job details on the .ps file
  -h : Show this message
  -v : Print version
 
@@ -822,7 +827,7 @@ __END__
 
 strucVis : Display small RNA depth of coverage on a predicted RNA secondary structure
 
-Copyright (C) 2016-2017 Michael J. Axtell
+Copyright (C) 2016-2018 Michael J. Axtell
 
 This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -867,12 +872,24 @@ RNAfold (installed in your PATH)
 
 -n : Name of locus. Prints name in the .ps file and on the plain text alignments. If not provided, defaults to 'Unnamed Locus'
 
+=head1 SWITCHES
+
+-x : Suppress the printing of detailed file information on the post-script file
+
+-v : Print the version and quit
+
+-h : Print help message and quit
+
 =head1 OUTPUT
 
 The text-based output of RNAfold is sent to STDOUT along with a text-based 'read cloud' of all aligned reads.
 The annotated post-script file goes to the file indicated by -p.
 
 =head1 CHANGELOG
+
+=head2 version 0.4 2018-06-19
+
+Added switch -x
 
 =head2 version 0.3 2017-09-06
 
