@@ -2,7 +2,7 @@
 strucVis : Display small RNA depth of coverage on a predicted RNA
     secondary structure
 
-Copyright (C) 2016-2018 Michael J. Axtell
+Copyright (C) 2016-2022 Michael J. Axtell
 
 This program is free software: you can redistribute it and/or modify it
     under the terms of the GNU General Public License as published by the
@@ -21,7 +21,7 @@ AUTHOR
     Michael J. Axtell, Penn State University mja18@psu.edu
 
 REQUIREMENTS
-- perl5 (installed at /usr/bin/perl)
+- perl5 (available at /usr/bin/env perl)
 - samtools (installed in your PATH)
 - RNAfold (installed in your PATH)
 
