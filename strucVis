@@ -1,8 +1,8 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env perl -w
 use strict;
 use Getopt::Std;
 
-my $version = 0.4;
+my $version = 0.5;
 my $help_message = help_message($version);
 unless($ARGV[0]) {
     print $help_message;
@@ -886,6 +886,10 @@ The text-based output of RNAfold is sent to STDOUT along with a text-based 'read
 The annotated post-script file goes to the file indicated by -p.
 
 =head1 CHANGELOG
+
+-head2 version 0.5 2022-11-30
+
+Changed shebang to /usr/bin/env perl
 
 =head2 version 0.4 2018-06-19
 
