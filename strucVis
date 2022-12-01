@@ -3,7 +3,7 @@ use warnings;
 use strict;
 use Getopt::Std;
 
-my $version = 0.5;
+my $version = 0.6;
 my $help_message = help_message($version);
 unless($ARGV[0]) {
     print $help_message;
