@@ -25,6 +25,22 @@ REQUIREMENTS
 - samtools (installed in your PATH)
 - RNAfold (installed in your PATH)
 
+# Install using conda
+
+## Linux, Intel-based Mac OSX
+1. Ensure conda is installed on your device.
+2. Set up channels to include bioconda, following instructions at <https://bioconda.github.io>
+3. `conda create --name strucvis strucvis`
+
+## Silicon-based Max OSX
+Do steps 1 and 2 as above. Then:
+```
+conda create --name strucvis
+conda activate strucvis
+conda config --env --set subdir osx-64
+conda install strucvis
+```
+
 USAGE
 
 `strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps] -n [Locus name]`
