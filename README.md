@@ -1,3 +1,5 @@
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/strucvis/README.html)
+
 # LICENSE
 strucVis : Display small RNA depth of coverage on a predicted RNA
     secondary structure
