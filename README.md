@@ -1,4 +1,4 @@
-[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/strucvis/README.html)
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/strucvis/README.html) ![Conda](https://img.shields.io/conda/dn/bioconda/strucvis)
 
 # LICENSE
 strucVis : Display small RNA depth of coverage on a predicted RNA
