@@ -3,7 +3,7 @@ use warnings;
 use strict;
 use Getopt::Std;
 
-my $version = 0.6;
+my $version = 0.7;
 my $help_message = help_message($version);
 unless($ARGV[0]) {
     print $help_message;
@@ -758,13 +758,14 @@ sub genome_check {
 sub bam_check {
     my($file) = @_;
     if($file) {
-	unless( -r $file) {
-	    die "FATAL: BAM file $file not readable\n";
-	}
-	my $index = $file . '.bai';
-	unless(-r $index) {
-	    die "FATAL: No .bai index for BAM file $file found. Please sort and index the BAM file and then try again\n";
-	}
+		unless( -r $file) {
+			die "FATAL: BAM file $file not readable\n";
+		}
+		my $index = $file . '.bai';
+		my $csi_index = $file . '.csi';
+		unless((-r $index) or (-r $csi_index)) {
+			die "FATAL: No .bai or .csi index for BAM file $file found. Please sort and index the BAM file and then try again\n";
+		}
     } else {
 	die "FATAL: No BAM file specified via -b\n";
     }

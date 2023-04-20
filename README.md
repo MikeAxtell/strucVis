@@ -4,7 +4,7 @@
 strucVis : Display small RNA depth of coverage on a predicted RNA
     secondary structure
 
-Copyright (C) 2016-2022 Michael J. Axtell
+Copyright (C) 2016-2023 Michael J. Axtell
 
 This program is free software: you can redistribute it and/or modify it
     under the terms of the GNU General Public License as published by the
