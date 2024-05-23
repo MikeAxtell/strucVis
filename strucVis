@@ -3,7 +3,7 @@ use warnings;
 use strict;
 use Getopt::Std;
 
-my $version = 0.7;
+my $version = 0.8;
 my $help_message = help_message($version);
 unless($ARGV[0]) {
     print $help_message;
@@ -33,6 +33,9 @@ s_check($opt_s);
 p_check($opt_p);
 n_check(\$opt_n);
 
+my $ps_name = $opt_p . '.ps';
+my $pdf_name = $opt_p . '.pdf';
+
 # get RNA sequence
 my $rna = get_rna($opt_g, $opt_c, $opt_s);
 # test
@@ -61,7 +64,7 @@ my %rna_depths = rna_depths(\%gen_depths, \$opt_c, \$opt_s);
 print "Genome: $opt_g\n";
 print "Alignments: $opt_b\n";
 print "Location: $opt_c $opt_s\n";
-print "Post-script file name: $opt_p\n";
+print "PDF file name: $pdf_name\n";
 print "Locus Name: $opt_n\n";
 
 # Generate the initial .ps file, which will be rna.ps in the working directory
@@ -317,10 +320,11 @@ sub parse_mdz {
     
 
 sub annotate_ps {
-    my($bamfile, $genfile, $query, $strand, $ps_outfile, $depth_hash, $name) = @_;  # by ref
+    my($bamfile, $genfile, $query, $strand, $ps_outfile_basename, $depth_hash, $name) = @_;  # by ref
     # open files
+	my $ps_outfile = $$ps_outfile_basename . '.ps';
     (open(PSIN, "rna.ps")) || die "FATAL: Cant open rna.ps in sub-routine annotate.ps go yell at Mike\n";
-    (open(PSOUT, ">$$ps_outfile")) || die "FATAL: Cant open output file $$ps_outfile to write to.Go yell at Mike\n";
+    (open(PSOUT, ">$ps_outfile")) || die "FATAL: Cant open output file $ps_outfile to write to.Go yell at Mike\n";
     
     # Define the legend 
     my $legend_string = get_ps_legend_string($bamfile, $genfile, $query, $strand, $name);
@@ -382,6 +386,12 @@ sub annotate_ps {
     
     # remove first ps file
     system "rm -f rna.ps";
+
+	# convert to PDF format
+	system "ps2pdf $ps_outfile";
+
+	# remove the modified ps file
+	system "rm -f $ps_outfile";
 }
 
 sub get_rgb {
@@ -681,9 +691,9 @@ sub p_check {
 	if(-e $p) {
 	    die "FATAL: Output file $p already exists. I wont overwrite it\!\n";
 	}
-	unless($p =~ /\.ps$/) {
-	    die "FATAL: Output file name $p invalid. It must end with .ps\n";
-	}
+	#unless($p =~ /\.ps$/) {
+	#    die "FATAL: Output file name $p invalid. It must end with .ps\n";
+	#}
     } else {
 	die "FATAL: Output postscript file not specified via -p\n";
     }
@@ -786,6 +796,12 @@ sub check_install {
     unless($an) {
 	die "FATAL: required program RNAfold not found in your PATH\n";
     }
+	open(W, "which ps2pdf |");
+    $an = <W>;
+    close W;
+    unless($an) {
+	die "FATAL: required program ps2pdf not found in your PATH\n";
+    }
 }
 
 
@@ -794,24 +810,25 @@ sub help_message {
     my $message = "
 strucVis version $version
 
-USAGE: strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps] -n [locus name]
+USAGE: strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output_image] -n [locus name]
 
 DETAILS:
  -b : PATH to sorted file of aligned small RNA reads
  -g : PATH to genome in FASTA format.
  -c : Coordinates of interest in format Chr:Start-Stop, one-based, inclusive.
  -s : Genomic strand of interest. Must be 'plus' or 'minus'
- -p : Name of desired postscript output file
+ -p : Output pdf file base name (not including the .pdf suffix)
  -n : Name of the locus. Defaults to 'Unnamed Locus' if not provided.
 
 OTHER SWITCHES:
- -x : Suppress printing of job details on the .ps file
+ -x : Suppress printing of job details on the pdf file
  -h : Show this message
  -v : Print version
 
 REQUIRES:
  samtools
  RNAfold
+ ps2pdf 
 ";
     return $message;
 }
@@ -829,7 +846,7 @@ __END__
 
 strucVis : Display small RNA depth of coverage on a predicted RNA secondary structure
 
-Copyright (C) 2016-2018 Michael J. Axtell
+Copyright (C) 2016-2024 Michael J. Axtell
 
 This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -850,15 +867,17 @@ Michael J. Axtell, Penn State University mja18@psu.edu
 
 =head1 REQUIREMENTS
 
-perl5 (installed at /usr/bin/perl)
+perl5 (installed at /usr/bin/env perl)
 
 samtools (installed in your PATH)
 
 RNAfold (installed in your PATH)
 
+ps2pdf (installed in your PATH .. this is part of ghostscript)
+
 =head1 USAGE
 
-    strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps] -n [Locus name]
+    strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output_basename] -n [Locus name]
 
 =head1 INPUTS
 
@@ -870,9 +889,9 @@ RNAfold (installed in your PATH)
 
 -s : Strand of interest. Either 'plus' or 'minus'.
 
--p : Output postscript file name. Must end in .ps
+-p : Output pdf file base name (not including the .pdf suffix)
 
--n : Name of locus. Prints name in the .ps file and on the plain text alignments. If not provided, defaults to 'Unnamed Locus'
+-n : Name of locus. Prints name in the pdf file and on the plain text alignments. If not provided, defaults to 'Unnamed Locus'
 
 =head1 SWITCHES
 
@@ -888,6 +907,8 @@ The text-based output of RNAfold is sent to STDOUT along with a text-based 'read
 The annotated post-script file goes to the file indicated by -p.
 
 =head1 CHANGELOG
+
+-head2 ... see github for all subsequent changes!
 
 -head2 version 0.5 2022-11-30
 
