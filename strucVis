@@ -323,6 +323,7 @@ sub annotate_ps {
     my($bamfile, $genfile, $query, $strand, $ps_outfile_basename, $depth_hash, $name) = @_;  # by ref
     # open files
 	my $ps_outfile = $$ps_outfile_basename . '.ps';
+	my $pdf_outfile = $$ps_outfile_basename . '.pdf';
     (open(PSIN, "rna.ps")) || die "FATAL: Cant open rna.ps in sub-routine annotate.ps go yell at Mike\n";
     (open(PSOUT, ">$ps_outfile")) || die "FATAL: Cant open output file $ps_outfile to write to.Go yell at Mike\n";
     
@@ -388,7 +389,7 @@ sub annotate_ps {
     system "rm -f rna.ps";
 
 	# convert to PDF format
-	system "ps2pdf $ps_outfile";
+	system "ps2pdf $ps_outfile $pdf_outfile";
 
 	# remove the modified ps file
 	system "rm -f $ps_outfile";
