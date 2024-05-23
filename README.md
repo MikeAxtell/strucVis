@@ -75,7 +75,7 @@ SWITCHES
 
 OUTPUT
 
-- A pdf image showing the predicted RNA secondary structure with each nucleotide color-coded to represent the depth of sRNA alignments. ![strucVis_image](./Cluster_1885.ps.pdf)
+- A pdf image showing the predicted RNA secondary structure with each nucleotide color-coded to represent the depth of sRNA alignments. ![strucVis_image](./Cluster_1885.png)
 - A plain-text file showing the predicted RNA secondary structure using dot-bracket notation, with sRNA alignments shown underneath.
 
 ```
