@@ -82,7 +82,7 @@ OUTPUT
 Genome: /Users/michaelaxtell/Desktop/ShortStack_Testing/TAIR10_genome.fa
 Alignments: /Users/michaelaxtell/Desktop/ShortStack_Testing/ShortStack_1467901443/Apr2M_R1_trimmed_ca.bam
 Location: 1:17825685-17825857 plus
-Post-script file name: example.ps
+Post-script file name: example.pdf
 UGCUUGAUCUCGGUUUUUGACCAGUUUAUUGCGUCGAUCAAUGCAUUGAAAGUGACUACAUCGGGGUUCCGAUUUUUUUUGUUCUUCAUAUGAUGAAGCGGAAACAGUAAUCAACCCUGGUUUAGUCACUUUCACUGCAUUAAUCAAUGCAUUUGUAAAAAGAGGGAAAAGCA
 (((((..((((((((...))))..((((((((((.(((.((((((.((((((((((((.(((((((((...(((.((((((..((((((...)))))))))))).)))....))))))))).)))))))))))).)))))).))).)))))...)))))..))))...))))) (-62.80)
 ....................................cUCAAUGCAUUGAAAGUGACUA................................................................................................................... len:22 al:1
