@@ -4,7 +4,7 @@
 strucVis : Display small RNA depth of coverage on a predicted RNA
     secondary structure
 
-Copyright (C) 2016-2023 Michael J. Axtell
+Copyright (C) 2016-2024 Michael J. Axtell
 
 This program is free software: you can redistribute it and/or modify it
     under the terms of the GNU General Public License as published by the
@@ -26,6 +26,7 @@ REQUIREMENTS
 - perl5 (available at /usr/bin/env perl)
 - samtools (installed in your PATH)
 - RNAfold (installed in your PATH)
+- ps2pdf (installed in your PATH .. this is part of the ghostscript package)
 
 # Install using conda
 
@@ -45,7 +46,7 @@ conda install strucvis
 
 USAGE
 
-`strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output.ps] -n [Locus name]`
+`strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [image_output] -n [Locus name]`
 
 INPUTS
 ```
@@ -58,9 +59,9 @@ INPUTS
 
     -s : Strand of interest. Either 'plus' or 'minus'.
 
-    -p : Output postscript file name. Must end in .ps
+    -p : Output pdf file name. Omit the .pdf suffix, it will be added for you.
 
-    -n : Name of locus. Prints name in the .ps file and on the plain text
+    -n : Name of locus. Prints name in the pdf file and on the plain text
     alignments. If not provided, defaults to 'Unnamed Locus'
 
 SWITCHES
@@ -74,7 +75,7 @@ SWITCHES
 
 OUTPUT
 
-- A post-script image showing the predicted RNA secondary structure with each nucleotide color-coded to represent the depth of sRNA alignments. ![strucVis_image](./example.png)
+- A pdf image showing the predicted RNA secondary structure with each nucleotide color-coded to represent the depth of sRNA alignments. ![strucVis_image](./example.png)
 - A plain-text file showing the predicted RNA secondary structure using dot-bracket notation, with sRNA alignments shown underneath.
 
 ```
