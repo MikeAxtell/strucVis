@@ -3,7 +3,7 @@ use warnings;
 use strict;
 use Getopt::Std;
 
-my $version = 0.8;
+my $version = 0.9;
 my $help_message = help_message($version);
 unless($ARGV[0]) {
     print $help_message;
@@ -29,6 +29,7 @@ check_install();
 bam_check($opt_b);
 my %fai = genome_check($opt_g);
 c_check(\$opt_c, \%fai);
+
 s_check($opt_s);
 p_check($opt_p);
 n_check(\$opt_n);
@@ -280,9 +281,21 @@ sub get_seqs_g {
 	
 	# define its name, which is SEQ:al_start-al_stop
 	my $key = "$revised_seq" . ":" . "$al_start" . "-" . "$al_stop";
-	
+	my $reads_on_line;
+	# determine the count (verbose or condensed BAM)
+	if ($sam_fields[0] =~ /_Cd\d+_\d+$/) {
+		if ($_ =~ /\tXW:i:(\d+)/) {
+			$reads_on_line = $1;
+		} else {
+			$reads_on_line = 1;
+		}
+	} else {
+		$reads_on_line = 1;
+	}
+
 	# add it to the count
-	++$hash{$key};
+	#++$hash{$key};
+	$hash{$key} += $reads_on_line;
     }
     close SAM;
     return %hash;
@@ -592,6 +605,7 @@ sub rna_depths {
     
 sub g_depths {
     my($bamfile, $query, $strand) = @_;
+
     my $F = 4 + 256 + 512 + 1024 + 2048;  ## filtered out by default. See SAM spec.
     if($strand eq 'plus') {
 	$F += 16;
@@ -618,7 +632,18 @@ sub g_depths {
     open(SAM, "samtools view $flag_string $bamfile $query |");
     while (<SAM>) {
 	my @fields = split ("\t", $_);
+	my $reads_on_line;
 	
+	# determine reads on line, depending on verbose or condensed bam
+	if ($fields[0] =~ /_Cd\d+_\d+$/) {
+		if ($_ =~ /\tXW:i:(\d+)/) {
+			$reads_on_line = $1;
+		} else {
+			$reads_on_line = 1;
+		}
+	} else {
+		$reads_on_line = 1;
+	}
 	# No alignments involving indels (I, D), introns (N), clipping (S, H), or padding (P).   
 	if($fields[5] =~ /[IDNSHP]/) {
 	    next;
@@ -646,7 +671,8 @@ sub g_depths {
 	}
 	for(my $i = $fields[3]; $i < ($fields[3] + $len); ++$i) {
 	    if(exists($depth{$i})) {
-		++$depth{$i};
+		#++$depth{$i};
+		$depth{$i} += $reads_on_line;
 	    }
 	}
     }
