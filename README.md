@@ -4,7 +4,7 @@
 strucVis : Display small RNA depth of coverage on a predicted RNA
     secondary structure
 
-Copyright (C) 2016-2024 Michael J. Axtell
+Copyright (C) 2016-2026 Michael J. Axtell
 
 This program is free software: you can redistribute it and/or modify it
     under the terms of the GNU General Public License as published by the
@@ -28,25 +28,21 @@ REQUIREMENTS
 - RNAfold (installed in your PATH)
 - ps2pdf (installed in your PATH .. this is part of the ghostscript package)
 
-# Install using conda
+# Install using pixi and bioconda
 
-## Linux, Intel-based Mac OSX
-1. Ensure conda is installed on your device.
-2. Set up channels to include bioconda, following instructions at <https://bioconda.github.io>
-3. `conda create --name strucvis strucvis`
-
-## Silicon-based Max OSX
-Do steps 1 and 2 as above. Then:
+1. Ensure pixi is installed on your device. <https://pixi.prefix.dev/latest/installation/>
+2. Configure pixi to use channels conda-forge and bioconda `pixi config set default-channels '["conda-forge", "bioconda"]'` <https://bioconda.github.io>
+3. For a global installation: `pixi global install strucvis`
+4. Or, for an environment in a specific directory: 
 ```
-conda create --name strucvis
-conda activate strucvis
-conda config --env --set subdir osx-64
-conda install strucvis
+cd myproject
+pixi init
+pixi add strucvis
 ```
 
 USAGE
 
-`strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [image_output] -n [Locus name]`
+`strucVis [-xvh] -b bam -g genome -c Chr:start-stop -s strand -p image_output [-n Locus name -m range(s)]`
 
 INPUTS
 ```
@@ -63,6 +59,9 @@ INPUTS
 
     -n : Name of locus. Prints name in the pdf file and on the plain text
     alignments. If not provided, defaults to 'Unnamed Locus'
+
+    -m : One or more ranges to highlight. In format start-stop. Multiple ranges can be separated by commas. For instance, 20-40,90-110.
+
 
 SWITCHES
     -x : Suppress the printing of detailed file information on the

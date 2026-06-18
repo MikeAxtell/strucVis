@@ -3,7 +3,7 @@ use warnings;
 use strict;
 use Getopt::Std;
 
-my $version = 0.9;
+my $version = '1.0';
 my $help_message = help_message($version);
 unless($ARGV[0]) {
     print $help_message;
@@ -11,8 +11,10 @@ unless($ARGV[0]) {
 }
 
 ## options
-our($opt_b, $opt_g, $opt_c, $opt_s, $opt_p, $opt_h, $opt_v, $opt_n, $opt_x);
-getopts('xhvb:g:c:s:p:n:');
+# new opt m is a (possibly) comma-delimited list of coordinates like 1-21,56-86,
+#  that indicate regions to highlight. Generally for denoting microRNA and miRNA* positions
+our($opt_b, $opt_g, $opt_c, $opt_s, $opt_p, $opt_h, $opt_v, $opt_n, $opt_x, $opt_m);
+getopts('xhvb:g:c:s:p:n:m:');
 if($opt_h) {
     print $help_message;
     exit;
@@ -67,6 +69,9 @@ print "Alignments: $opt_b\n";
 print "Location: $opt_c $opt_s\n";
 print "PDF file name: $pdf_name\n";
 print "Locus Name: $opt_n\n";
+if($opt_m) {
+	print "Highlighted range(s): $opt_m\n";
+}
 
 # Generate the initial .ps file, which will be rna.ps in the working directory
 system "echo $rna | RNAfold";
@@ -85,11 +90,44 @@ my %seqs_g = get_seqs_g($opt_b, $opt_c, $opt_s);
 # adjust this information for polarity, T-->U, and coordinates
 my %seqs_final = adjust_seqs(\%seqs_g, \$opt_c, \$opt_s);
 
+# Print out opt_m range(s), if provided
+if ($opt_m) {
+	print_ranges(\$opt_m, \$opt_c);
+}
+
 # print out the word cloud, sorted by left-most coordinate
 print_words(\%seqs_final, \$opt_c);
 
 # annotate the ps file
-annotate_ps(\$opt_b, \$opt_g, \$opt_c, \$opt_s, \$opt_p, \%rna_depths, \$opt_n);
+annotate_ps(\$opt_b, \$opt_g, \$opt_c, \$opt_s, \$opt_p, \%rna_depths, \$opt_n, \$opt_m);
+
+sub print_ranges{
+	my($ranges, $coordinates) = @_;
+
+	# Initialize an array of space characters with length of the printed sequence
+	my $full_len;
+    if($$coordinates =~ /^\S+:(\d+)-(\d+)/) {
+	$full_len = $2 - $1 + 1;
+    } else {
+	die "error in sub-routine print_ranges: blame axtell if u can find him\n";
+    }
+	my @range_chars;
+	for(my $i = 0; $i < $full_len; ++$i) {
+		$range_chars[$i] = ' ';
+	}
+
+	my @rng_blocks = split(',',$$ranges);
+	foreach my $rng (@rng_blocks) {
+		# e.g. 20-40
+		if($rng =~ /^(\d+)-(\d+)$/) {
+			for(my $j = $1 - 1; $j < $2; ++$j) {
+				$range_chars[$j] = '*';
+			}
+		}
+	}
+	my $range_str = join('', @range_chars);
+	print "$range_str User-highlighted range(s)\n";
+}
 
 sub print_words {
     my($hash, $coordinates) = @_;
@@ -333,7 +371,7 @@ sub parse_mdz {
     
 
 sub annotate_ps {
-    my($bamfile, $genfile, $query, $strand, $ps_outfile_basename, $depth_hash, $name) = @_;  # by ref
+    my($bamfile, $genfile, $query, $strand, $ps_outfile_basename, $depth_hash, $name, $ranges) = @_;  # by ref
     # open files
 	my $ps_outfile = $$ps_outfile_basename . '.ps';
 	my $pdf_outfile = $$ps_outfile_basename . '.pdf';
@@ -341,7 +379,7 @@ sub annotate_ps {
     (open(PSOUT, ">$ps_outfile")) || die "FATAL: Cant open output file $ps_outfile to write to.Go yell at Mike\n";
     
     # Define the legend 
-    my $legend_string = get_ps_legend_string($bamfile, $genfile, $query, $strand, $name);
+    my $legend_string = get_ps_legend_string($bamfile, $genfile, $query, $strand, $name, $ranges);
     
     # Modify the postscript file
     while (<PSIN>) {
@@ -377,10 +415,29 @@ sub annotate_ps {
 	    print PSOUT "  -15 10 rlineto\n";
 	    print PSOUT "  -8 0 rmoveto \(5\'\) show stroke\n";
 	    print PSOUT "\} bind def\n";
-	    
+
+		# add cmark function, copied from ViennaRNA RNAplot
+		print PSOUT "/cmark { % i cmark   draw circle around base i\n";
+	    print PSOUT "newpath 1 sub coor exch get aload pop\n";
+		#print PSOUT "size 2 div 0 360 arc stroke\n";
+		print PSOUT "fsize 0.7 mul 0 360 arc stroke\n";
+		print PSOUT "} bind def\n";
+
 	    # mark 5' end
 	    print PSOUT "1 show5\n";
 	    
+		# Add circles to user-defined range(s)
+		if($$ranges) {
+			my @rng_blocks = split(',',$$ranges);
+			foreach my $rng (@rng_blocks) {
+				if($rng =~ /^(\d+)-(\d+)$/) {
+					for(my $j = $1; $j <= $2; ++$j) {
+						print PSOUT	"$j cmark\n";
+					}
+				}
+			}
+		}
+
 	    ## add the colored circles
 	    my $pos;
 	    my $freq;
@@ -393,6 +450,8 @@ sub annotate_ps {
 		    print PSOUT "$pos $rgb[0] $rgb[1] $rgb[2] maplemark\n";
 		}
 	    }
+
+		
 	}
     }
     close PSIN;
@@ -405,7 +464,7 @@ sub annotate_ps {
 	system "ps2pdf $ps_outfile $pdf_outfile";
 
 	# remove the modified ps file
-	system "rm -f $ps_outfile";
+	#system "rm -f $ps_outfile";
 }
 
 sub get_rgb {
@@ -454,7 +513,7 @@ sub get_rgb {
 }
 
 sub get_ps_legend_string {
-    my($bamfile, $genfile, $query, $strand, $name) = @_; ## refs
+    my($bamfile, $genfile, $query, $strand, $name, $ranges) = @_; ## refs
     my $string = "\% maple legend and information
 0 0 1 setrgbcolor
 72 720 4 0 360 arc closepath fill stroke
@@ -562,6 +621,14 @@ setfont
 \(Name: $$name\) show
 
 ";
+if($$ranges) {
+	$string .= "
+	\/Helvetica findfont
+	8 scalefont setfont
+	72 94 moveto
+\(Circled Range(s): $$ranges\) show
+	";
+}
     }
     return $string;
 }
@@ -837,7 +904,7 @@ sub help_message {
     my $message = "
 strucVis version $version
 
-USAGE: strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output_image] -n [locus name]
+USAGE: strucVis [-xvh] -b bam -g genome -c Chr:start-stop -s strand -p image_output [-n Locus name -m range(s)]
 
 DETAILS:
  -b : PATH to sorted file of aligned small RNA reads
@@ -846,6 +913,7 @@ DETAILS:
  -s : Genomic strand of interest. Must be 'plus' or 'minus'
  -p : Output pdf file base name (not including the .pdf suffix)
  -n : Name of the locus. Defaults to 'Unnamed Locus' if not provided.
+ -m : One or more ranges to highlight. In format start-stop,start-stop.
 
 OTHER SWITCHES:
  -x : Suppress printing of job details on the pdf file
@@ -873,7 +941,7 @@ __END__
 
 strucVis : Display small RNA depth of coverage on a predicted RNA secondary structure
 
-Copyright (C) 2016-2024 Michael J. Axtell
+Copyright (C) 2016-2026 Michael J. Axtell
 
 This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -904,7 +972,7 @@ ps2pdf (installed in your PATH .. this is part of ghostscript)
 
 =head1 USAGE
 
-    strucVis -b [bam] -g [genome] -c [Chr:start-stop] -s [strand 'plus' or 'minus'] -p [output_basename] -n [Locus name]
+    strucVis [-xvh] -b bam -g genome -c Chr:start-stop -s strand -p image_output [-n Locus name -m range(s)]
 
 =head1 INPUTS
 
@@ -919,6 +987,8 @@ ps2pdf (installed in your PATH .. this is part of ghostscript)
 -p : Output pdf file base name (not including the .pdf suffix)
 
 -n : Name of locus. Prints name in the pdf file and on the plain text alignments. If not provided, defaults to 'Unnamed Locus'
+
+-m : One or more ranges to highlight. In format start-stop. Multiple ranges can be separated by commas. For instance, 20-40,90-110.
 
 =head1 SWITCHES
 
