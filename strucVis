@@ -3,7 +3,7 @@ use warnings;
 use strict;
 use Getopt::Std;
 
-my $version = '1.0';
+my $version = '1.0.1';
 my $help_message = help_message($version);
 unless($ARGV[0]) {
     print $help_message;
@@ -464,7 +464,7 @@ sub annotate_ps {
 	system "ps2pdf $ps_outfile $pdf_outfile";
 
 	# remove the modified ps file
-	#system "rm -f $ps_outfile";
+	system "rm -f $ps_outfile";
 }
 
 sub get_rgb {
